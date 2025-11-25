@@ -1,5 +1,0 @@
-2025-09-30 21:51:51,997 INFO    MainThread:17533 [wandb_init.py:setup_run_log_directory():705] Logging user logs to /Users/eating/Documents/sac/ppo/wandb/run-20250930_215151-q8hmknz3/logs/debug.log
-2025-09-30 21:51:51,997 INFO    MainThread:17533 [wandb_init.py:setup_run_log_directory():706] Logging internal logs to /Users/eating/Documents/sac/ppo/wandb/run-20250930_215151-q8hmknz3/logs/debug-internal.log
-2025-09-30 21:51:51,997 INFO    MainThread:17533 [wandb_init.py:init():832] calling init triggers
-2025-09-30 21:51:51,997 INFO    MainThread:17533 [wandb_init.py:init():837] wandb.init called with sweep_config: {}
-config: {'algorithm': 'PPO', 'environment': 'HalfCheetah-v4', 'max_episodes': 5000, 'steps_per_episode': 1000, 'learning_rate_actor': 0.0003, 'learning_rate_critic': 0.001, 'clip_ratio': 0.2, 'gamma': 0.99, 'lambda': 0.95, 'entropy_coef': 0.01, 'target_kl': 0.015, '_wandb': {}}

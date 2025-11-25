@@ -1,3 +1,0 @@
-/Users/eating/miniconda3/envs/py11/lib/python3.11/site-packages/gymnasium/envs/registration.py:512: DeprecationWarning: [33mWARN: The environment HalfCheetah-v4 is out of date. You should consider upgrading to version `v5`.[0m
-  logger.deprecation(
-Error loading checkpoint: [Errno 2] No such file or directory: 'saved_models/actor_ep990.pth'

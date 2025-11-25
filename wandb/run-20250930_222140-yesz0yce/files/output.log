@@ -1,7 +1,0 @@
-/Users/eating/Library/Python/3.9/lib/python/site-packages/gymnasium/envs/registration.py:519: DeprecationWarning: [33mWARN: The environment HalfCheetah-v4 is out of date. You should consider upgrading to version `v5`.[0m
-  logger.deprecation(
-Successfully loaded actor checkpoint from saved_models/actor_ep3000.pth
-Successfully loaded critic checkpoint from saved_models/critic_ep3000.pth
-/Users/eating/Library/Python/3.9/lib/python/site-packages/glfw/__init__.py:917: GLFWError: (65537) b'The GLFW library is not initialized'
-  warnings.warn(message, GLFWError)
-Episode 1 - Reward: 3713.20, Steps: 1000

@@ -1,1 +1,0 @@
-{"value_loss":120.00030491803143,"kl_div":0.01089311707927426,"entropy":1.4026013731956481,"policy_loss":-0.1124198938057095,"_runtime":5.170274708,"_timestamp":1.7634318224427469e+09,"reward":-765.5296890402307,"episode":10,"cumulative_steps":11000,"_step":11000,"_wandb":{"runtime":5}}

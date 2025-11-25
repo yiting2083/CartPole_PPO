@@ -1,6 +1,0 @@
-/Users/eating/Library/Python/3.9/lib/python/site-packages/gymnasium/envs/registration.py:519: DeprecationWarning: [33mWARN: The environment HalfCheetah-v4 is out of date. You should consider upgrading to version `v5`.[0m
-  logger.deprecation(
-Successfully loaded actor checkpoint from saved_models/actor_ep1000.pth
-Successfully loaded critic checkpoint from saved_models/critic_ep1000.pth
-
-Evaluation interrupted by user
