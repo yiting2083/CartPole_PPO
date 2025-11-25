@@ -46,12 +46,12 @@ def main():
     parser = argparse.ArgumentParser(description='Evaluate trained PPO agent on cartpole')
     parser.add_argument('--actor_checkpoint', 
                     type=str, 
-                    default='saved_models/actor_ep400.pth', 
+                    default='saved_models/actor_ep250.pth', 
                     help='Path to actor checkpoint')
 
     parser.add_argument('--critic_checkpoint', 
                         type=str, 
-                        default='saved_models/critic_ep400.pth',
+                        default='saved_models/critic_ep250.pth',
                         help='Path to critic checkpoint')
 
     parser.add_argument('--episodes', type=int, default=5, help='Number of episodes to evaluate')

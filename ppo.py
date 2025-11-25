@@ -28,13 +28,13 @@ class Actor(nn.Module):
     def __init__(self, state_dim, action_dim):
         super(Actor, self).__init__()
         self.net = nn.Sequential(
-            nn.Linear(state_dim, 8),
+            nn.Linear(state_dim, 16),
             nn.ReLU(),
-            nn.Linear(8, 8),
+            nn.Linear(16, 16),
             nn.ReLU()
         )
         # logits head for categorical distribution
-        self.logits = nn.Linear(8, action_dim)
+        self.logits = nn.Linear(16, action_dim)
     def forward(self, state):
         if not isinstance(state, torch.Tensor):
             state = torch.tensor(state, dtype=torch.float32)
@@ -50,11 +50,11 @@ class Critic(nn.Module):
     def __init__(self, state_dim):
         super(Critic, self).__init__()
         self.net = nn.Sequential(
-            nn.Linear(state_dim, 8),
+            nn.Linear(state_dim, 16),
             nn.ReLU(),
-            nn.Linear(8, 8),
+            nn.Linear(16, 16),
             nn.ReLU(),
-            nn.Linear(8, 1)
+            nn.Linear(16, 1)
         )
     
     def forward(self, state):
@@ -92,6 +92,14 @@ class PPO:
         self.logged_rewards = []
         self.logged_entropies = []
         self.logged_kls = []
+        self.eval_points = []
+        self.eval_rewards = []
+        # capture env name for creating eval envs
+        env_spec = getattr(env, 'spec', None)
+        if env_spec is not None and getattr(env_spec, 'id', None):
+            self.env_name = env_spec.id
+        else:
+            self.env_name = 'CartPole-v1'
         
     def get_action(self, state):
         logits = self.actor(state)
@@ -186,7 +194,8 @@ class PPO:
         return advantages, returns
     
     
-    def train(self, max_episodes=200, steps_per_episode=200, seed=45, save_interval=50):
+    def train(self, max_episodes=200, steps_per_episode=200, seed=45, save_interval=50,
+              eval_every=10, eval_episodes=1, eval_seed=10):
         os.makedirs('saved_models', exist_ok=True)
         training_start_time = time.time()
         
@@ -251,12 +260,44 @@ class PPO:
             self.logged_entropies.append(ep_entropy)
             self.logged_kls.append(train_info.get('kl_div', 0.0))
             if episode % 50 == 0 or episode == max_episodes - 1:
-                self._save_training_plots()
+                self._save_training_plots(out_dir='.')
+
+            # run evaluation using fixed eval_seed every eval_every episodes
+            if eval_every > 0 and (episode % eval_every == 0 or episode == max_episodes - 1):
+                avg_eval = self._evaluate_actor(eval_seed, eval_episodes)
+                self.eval_points.append(episode)
+                self.eval_rewards.append(avg_eval)
             
             if episode > 0 and episode % save_interval == 0:
                 self.save_model(episode)
         
-        return self.episode_rewards
+        return {
+            'train_rewards': self.logged_rewards,
+            'train_entropies': self.logged_entropies,
+            'train_kls': self.logged_kls,
+            'eval_points': self.eval_points,
+            'eval_rewards': self.eval_rewards
+        }
+
+    def _evaluate_actor(self, eval_seed, eval_episodes=1):
+        # create fresh env for evaluation
+        env = gym.make(self.env_name)
+        total = []
+        for ep in range(eval_episodes):
+            state, _ = env.reset(seed=eval_seed)
+            done = False
+            ep_reward = 0
+            while not done:
+                with torch.no_grad():
+                    logits = self.actor(state)
+                    # deterministic action for evaluation
+                    action = int(torch.argmax(logits, dim=-1).item())
+                state, reward, terminated, truncated, _ = env.step(action)
+                done = terminated or truncated
+                ep_reward += reward
+            total.append(ep_reward)
+        env.close()
+        return float(np.mean(total))
 
     def save_model(self, episode):
 
@@ -327,10 +368,90 @@ class PPO:
         
 # Training
 def main():
-    env = gym.make('CartPole-v1')
-    set_seed(45)
-    agent = PPO(env)
-    rewards = agent.train(seed=45, max_episodes=410, save_interval=100)
+    seeds = [0, 1, 2]
+    max_episodes = 260
+    eval_every = 10
+    eval_episodes = 3
+    eval_seed = 10
+
+    all_train_rewards = []
+    all_train_entropies = []
+    all_train_kls = []
+    all_eval_rewards = []
+    eval_x = None
+
+    for s in seeds:
+        set_seed(s)
+        env = gym.make('CartPole-v1')
+        agent = PPO(env)
+        res = agent.train(seed=s, max_episodes=max_episodes, save_interval=50,
+                          eval_every=eval_every, eval_episodes=eval_episodes, eval_seed=eval_seed)
+        all_train_rewards.append(res['train_rewards'])
+        all_train_entropies.append(res['train_entropies'])
+        all_train_kls.append(res['train_kls'])
+        all_eval_rewards.append(res['eval_rewards'])
+        if eval_x is None:
+            eval_x = res['eval_points']
+        env.close()
+
+
+    train_rewards_np = np.array(all_train_rewards)  # shape (n_seeds, episodes)
+    train_ent_np = np.array(all_train_entropies)
+    train_kl_np = np.array(all_train_kls)
+
+    # compute mean/std 
+    tr_mean = np.mean(train_rewards_np, axis=0)
+    tr_std = np.std(train_rewards_np, axis=0)
+
+    ent_mean = np.mean(train_ent_np, axis=0)
+    ent_std = np.std(train_ent_np, axis=0)
+
+    kl_mean = np.mean(train_kl_np, axis=0)
+    kl_std = np.std(train_kl_np, axis=0)
+
+    # eval rewards
+    eval_rewards_np = np.array(all_eval_rewards)
+    eval_mean = np.mean(eval_rewards_np, axis=0)
+    eval_std = np.std(eval_rewards_np, axis=0)
+
+    episodes = np.arange(1, max_episodes + 1)
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(episodes, tr_mean, label='Train Reward Mean')
+    ax.fill_between(episodes, tr_mean - tr_std, tr_mean + tr_std, alpha=0.3)
+    if eval_x is not None and len(eval_x) > 0:
+        eval_x_arr = np.array(eval_x) + 1
+        ax.plot(eval_x_arr, eval_mean, marker='o', linestyle='-', color='red', label='Eval Mean')
+        ax.fill_between(eval_x_arr, eval_mean - eval_std, eval_mean + eval_std, color='red', alpha=0.25, label='Eval ±STD')
+    ax.set_xlabel('Episode')
+    ax.set_ylabel('Reward')
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig('learning_curve_reward.png')
+    plt.close(fig)
+
+    # Entropy plot
+    fig, ax = plt.subplots(figsize=(10, 3))
+    ax.plot(episodes, ent_mean, label='Entropy Mean', color='orange')
+    ax.fill_between(episodes, ent_mean - ent_std, ent_mean + ent_std, alpha=0.3, color='orange')
+    ax.set_xlabel('Episode')
+    ax.set_ylabel('Entropy')
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig('learning_curve_entropy.png')
+    plt.close(fig)
+
+    # KL plot
+    fig, ax = plt.subplots(figsize=(10, 3))
+    ax.plot(episodes, kl_mean, label='KL Mean', color='green')
+    ax.fill_between(episodes, kl_mean - kl_std, kl_mean + kl_std, alpha=0.3, color='green')
+    ax.set_xlabel('Episode')
+    ax.set_ylabel('KL Divergence')
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig('learning_curve_kl.png')
+    plt.close(fig)
+
+    print('Saved learning curves: learning_curve_reward.png, learning_curve_entropy.png, learning_curve_kl.png')
 
 
 if __name__ == "__main__":
