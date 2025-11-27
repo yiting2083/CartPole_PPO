@@ -1,78 +1,73 @@
-import gymnasium as gym
 import torch
 import numpy as np
-from torch.distributions import Categorical
-import time
-import argparse
+import cv2
+from dm_control import suite
 
-from ppo import Actor, Critic, PPO
- 
-def evaluate_policy(actor, env, num_episodes=5, render=True):
+from ppo import PPO
 
-    total_rewards = []
+
+def get_state_vector(time_step):
+    obs = time_step.observation
+    state_parts = []
+    for key in sorted(obs.keys()):
+        val = obs[key]
+        state_parts.append(val.flatten())
+    return np.concatenate(state_parts)
+
+
+def visualize_policy(actor, domain_name='cartpole', task_name='balance', num_episodes=5):
+    env = suite.load(domain_name=domain_name, task_name=task_name)
+    width, height = 640, 480
     
     for episode in range(num_episodes):
-        state, _ = env.reset()
+        time_step = env.reset()
+        state = get_state_vector(time_step)
         episode_reward = 0
-        done = False
         step = 0
         
-        while not done:
-            if render:
-                env.render()
-                time.sleep(0.01) 
-            
-         
+        while not time_step.last():
             with torch.no_grad():
-                logits = actor(state)
-                dist = Categorical(logits=logits)
-                action = dist.sample()
+                mean, std = actor(state)
+                action = mean.squeeze().numpy()
             
-          
-            state, reward, terminated, truncated, _ = env.step(int(action.item()))
-            done = terminated or truncated
+            time_step = env.step(action)
+            state = get_state_vector(time_step)
+            reward = time_step.reward if time_step.reward is not None else 0.0
             episode_reward += reward
             step += 1
-
-        total_rewards.append(episode_reward)
-        print(f"{episode_reward:.2f}")
+            
+            # render
+            pixels = env.physics.render(height=height, width=width, camera_id=0)
+            cv2.imshow('CartPole Balance', cv2.cvtColor(pixels, cv2.COLOR_RGB2BGR))
+            
+            key = cv2.waitKey(1)
+            if key & 0xFF == ord('q'):
+                cv2.destroyAllWindows()
+                return
+            elif key & 0xFF == ord('p'):
+                cv2.waitKey(0)
+        
+        print(f"Episode {episode + 1}: Reward={episode_reward:.2f}, Steps={step}")
     
-    avg_reward = np.mean(total_rewards)
-    # print only average reward
-    print(f"{avg_reward:.2f}")
-    return avg_reward
+    cv2.destroyAllWindows()
+    print(f"\nVisualization complete!")
+
 
 def main():
-    parser = argparse.ArgumentParser(description='Evaluate trained PPO agent on cartpole')
-    parser.add_argument('--actor_checkpoint', 
-                    type=str, 
-                    default='saved_models/actor_ep250.pth', 
-                    help='Path to actor checkpoint')
-
-    parser.add_argument('--critic_checkpoint', 
-                        type=str, 
-                        default='saved_models/critic_ep250.pth',
-                        help='Path to critic checkpoint')
-
-    parser.add_argument('--episodes', type=int, default=5, help='Number of episodes to evaluate')
-    args = parser.parse_args()
+    checkpoint_path = 'saved_models/actor_ep300.pth'
+    domain_name = 'cartpole'
+    task_name = 'balance'
+    num_episodes = 5
     
-
-    env = gym.make('CartPole-v1', render_mode="human")
-
-    agent = PPO(env)
-
-    actor_checkpoint = torch.load(args.actor_checkpoint)
+    print(f"Loading checkpoint: {checkpoint_path}\n")
+    
+    agent = PPO(domain_name=domain_name, task_name=task_name)
+    actor_checkpoint = torch.load(checkpoint_path)
     agent.actor.load_state_dict(actor_checkpoint['model_state_dict'])
-
-    if args.critic_checkpoint:
-        critic_checkpoint = torch.load(args.critic_checkpoint)
-        agent.critic.load_state_dict(critic_checkpoint['model_state_dict'])
-
     agent.actor.eval()
-    agent.critic.eval()
-    evaluate_policy(agent.actor, env, num_episodes=args.episodes)
-    env.close()
+    
+    visualize_policy(agent.actor, domain_name, task_name, num_episodes)
+
 
 if __name__ == "__main__":
     main()
